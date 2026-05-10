@@ -1,16 +1,33 @@
-# React + Vite
+# MediCore
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+MediCore is a premium, enterprise-level Hospital Management System MVP with a scalable monorepo architecture. 
+Designed to streamline medical workflows across Admin, Doctor, and Reception roles, MediCore aims to integrate advanced AI-driven features to enhance the quality of care and operational efficiency.
 
-Currently, two official plugins are available:
+## 🏗 Architecture Overview
+This project uses a monorepo structure to keep everything unified and scalable.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```
+MediCore/
+├── frontend/       # React + Vite + Tailwind CSS User Interface
+├── backend/        # Node.js + Express API Backend (Planned)
+├── ai-services/    # AI/ML Microservices (Symptom Checker, OCR, Analysis)
+└── database/       # Schemas, Diagrams, and DB Seed Data
+```
 
-## React Compiler
+## 🚀 Frontend Quickstart
+The frontend is built with React, Vite, Tailwind CSS v4, and React Router DOM.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+To run the frontend:
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-## Expanding the ESLint configuration
+## 🔮 Future AI Plans
+The `ai-services` folder is reserved for integrating Python or Node.js microservices that provide advanced healthcare capabilities:
+- **Symptom Checker Chatbot**
+- **Lab Report Auto-Analysis**
+- **Medical OCR Engine**
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+See `docs/roadmap.md` for more details.

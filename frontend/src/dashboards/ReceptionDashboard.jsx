@@ -23,49 +23,10 @@ import { DashboardCard } from '../components/DashboardCard';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { cn } from '../utils/utils';
+import { patientService } from '../services/patientService';
+import { authService } from '../services/authService';
 
-// Realistic Dummy Patient Database with Visit History
-const MOCK_PATIENTS = [
-  { 
-    patientId: 'MC-001', fullName: 'Rahul Patil', age: '32', gender: 'Male', phone: '9876543210', 
-    address: '101, Shivneri Appt, Kothrud, Pune', bloodGroup: 'A+', emergencyContact: 'Sneha Patil (9876543211)', 
-    medicalHistory: 'Asthma', allergies: 'Dust, Pollen',
-    lastVisit: '8 May 2026',
-    visitHistory: [
-      { date: '8 May 2026', doctor: 'Dr. Emily Chen', department: 'Pulmonology', diagnosis: 'Mild Asthma Exacerbation', prescription: 'Salbutamol Inhaler (SOS), Montelukast 10mg' },
-      { date: '12 Jan 2026', doctor: 'Dr. Michael Smith', department: 'General Medicine', diagnosis: 'Viral Fever', prescription: 'Paracetamol 500mg, Vitamin C' }
-    ]
-  },
-  { 
-    patientId: 'MC-002', fullName: 'Shubham Kale', age: '45', gender: 'Male', phone: '9123456780', 
-    address: '45, Laxmi Road, Pune', bloodGroup: 'O-', emergencyContact: 'Priya Kale (9123456781)', 
-    medicalHistory: 'Hypertension', allergies: 'None',
-    lastVisit: '15 Apr 2026',
-    visitHistory: [
-      { date: '15 Apr 2026', doctor: 'Dr. Amit Sharma', department: 'Cardiology', diagnosis: 'Elevated BP', prescription: 'Telmisartan 40mg (1 OD)' },
-      { date: '10 Sep 2025', doctor: 'Dr. Amit Sharma', department: 'Cardiology', diagnosis: 'Routine Checkup', prescription: 'Continue existing meds' }
-    ]
-  },
-  { 
-    patientId: 'MC-003', fullName: 'Amit Sharma', age: '28', gender: 'Male', phone: '9988776655', 
-    address: '22, Baner Road, Pune', bloodGroup: 'B+', emergencyContact: 'Ravi Sharma (9988776656)', 
-    medicalHistory: 'None', allergies: 'Penicillin',
-    lastVisit: '2 May 2026',
-    visitHistory: [
-      { date: '2 May 2026', doctor: 'Dr. Sarah Wilson', department: 'Dermatology', diagnosis: 'Contact Dermatitis', prescription: 'Hydrocortisone Cream 1%, Cetirizine 10mg' }
-    ]
-  },
-  { 
-    patientId: 'MC-004', fullName: 'Priya Deshmukh', age: '35', gender: 'Female', phone: '9011223344', 
-    address: '11/A, Kalyani Nagar, Pune', bloodGroup: 'AB+', emergencyContact: 'Rahul Deshmukh (9011223345)', 
-    medicalHistory: 'Hypothyroidism', allergies: 'Sulfa Drugs',
-    lastVisit: '28 Feb 2026',
-    visitHistory: [
-      { date: '28 Feb 2026', doctor: 'Dr. Emily Chen', department: 'Endocrinology', diagnosis: 'Hypothyroidism Management', prescription: 'Levothyroxine 50mcg' },
-      { date: '15 Nov 2025', doctor: 'Dr. Michael Smith', department: 'General Medicine', diagnosis: 'Migraine', prescription: 'Naproxen 500mg (SOS)' }
-    ]
-  },
-];
+// Removed MOCK_PATIENTS
 
 export function ReceptionDashboard() {
   const [photoPreview, setPhotoPreview] = useState(null);
@@ -79,6 +40,10 @@ export function ReceptionDashboard() {
   const [activePatient, setActivePatient] = useState(null); // Full patient object for profile view
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
+  
+  // API Data State
+  const [allPatients, setAllPatients] = useState([]);
+  const [doctors, setDoctors] = useState([]);
 
   // Camera State
   const [showCamera, setShowCamera] = useState(false);
@@ -87,7 +52,7 @@ export function ReceptionDashboard() {
 
   // Form State
   const [formData, setFormData] = useState({
-    patientId: 'MC-' + Math.floor(1000 + Math.random() * 9000), // Updated to match ID style
+    patientId: 'New', // Handled by backend now
     fullName: '',
     age: '',
     gender: '',
@@ -98,7 +63,7 @@ export function ReceptionDashboard() {
     symptoms: '',
     medicalHistory: '',
     allergies: '',
-    doctor: '',
+    doctorId: '',
     appointmentDate: '',
     appointmentTime: ''
   });
@@ -114,14 +79,31 @@ export function ReceptionDashboard() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    fetchInitialData();
+  }, []);
+
+  const fetchInitialData = async () => {
+    try {
+      const [patientsData, doctorsData] = await Promise.all([
+        patientService.getAll(),
+        authService.getDoctors()
+      ]);
+      setAllPatients(patientsData);
+      setDoctors(doctorsData);
+    } catch (error) {
+      console.error("Failed to fetch initial data", error);
+    }
+  };
+
   const handleSearchChange = (e) => {
     const query = e.target.value;
     setSearchQuery(query);
     if (query.trim().length > 0) {
-      const results = MOCK_PATIENTS.filter(p => 
-        p.fullName.toLowerCase().includes(query.toLowerCase()) || 
-        p.patientId.toLowerCase().includes(query.toLowerCase()) ||
-        p.phone.includes(query)
+      const results = allPatients.filter(p => 
+        p.fullName?.toLowerCase().includes(query.toLowerCase()) || 
+        p.patientId?.toLowerCase().includes(query.toLowerCase()) ||
+        p.mobile?.includes(query)
       );
       setSearchResults(results);
       setShowDropdown(true);
@@ -138,7 +120,7 @@ export function ReceptionDashboard() {
       ...formData,
       patientId: patient.patientId,
       symptoms: '',
-      doctor: '',
+      doctorId: '',
       appointmentDate: '',
       appointmentTime: ''
     });
@@ -203,22 +185,40 @@ export function ReceptionDashboard() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSaveAppointment = (e) => {
+  const handleSaveAppointment = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    // Simulate network request
-    setTimeout(() => {
-      setIsSubmitting(false);
+    
+    try {
+      if (!formData.doctorId) {
+        alert("Please assign a doctor!");
+        return;
+      }
+      
+      const payload = {
+        ...formData,
+        mobile: formData.phone // Mapping to match backend
+      };
+
+      await patientService.register(payload);
+      
       setShowToast(true);
       setTimeout(() => setShowToast(false), 6000);
-    }, 1500);
+      handleReset();
+      fetchInitialData(); // Refresh patient list
+    } catch (error) {
+      console.error("Failed to register patient", error);
+      alert(error.response?.data?.message || "Failed to register patient");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleReset = () => {
     setIsExistingPatient(false);
     setActivePatient(null);
     setFormData({
-      patientId: 'MC-' + Math.floor(1000 + Math.random() * 9000),
+      patientId: 'New',
       fullName: '',
       age: '',
       gender: '',
@@ -229,7 +229,7 @@ export function ReceptionDashboard() {
       symptoms: '',
       medicalHistory: '',
       allergies: '',
-      doctor: '',
+      doctorId: '',
       appointmentDate: '',
       appointmentTime: ''
     });
@@ -348,11 +348,11 @@ export function ReceptionDashboard() {
                     <div key={p.patientId} onClick={() => handlePatientSelect(p)} className="px-4 py-3 border-b border-slate-100 hover:bg-blue-50 cursor-pointer last:border-0 transition-colors flex justify-between items-center group">
                       <div>
                         <p className="text-sm font-semibold text-slate-900 group-hover:text-[#0ea5e9] transition-colors">{p.fullName}</p>
-                        <p className="text-xs text-slate-500 mt-0.5">{p.patientId} &bull; {p.phone}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{p.patientId} &bull; {p.mobile}</p>
                       </div>
                       <div className="text-right text-xs">
-                        <span className="text-slate-400 block">Last Visit</span>
-                        <span className="font-medium text-slate-700">{p.lastVisit}</span>
+                        <span className="text-slate-400 block">Registered</span>
+                        <span className="font-medium text-slate-700">{new Date(p.createdAt).toLocaleDateString()}</span>
                       </div>
                     </div>
                   ))}
@@ -427,39 +427,13 @@ export function ReceptionDashboard() {
                 </div>
               </div>
 
-              {/* Visit History Section */}
+              {/* Visit History Section (Placeholder for MVP) */}
               <div className="p-6 border-b border-slate-200">
                 <h3 className="text-sm font-semibold text-[#0ea5e9] uppercase tracking-wider mb-4 flex items-center">
                   <Clock size={16} className="mr-2" /> Patient Visit History
                 </h3>
-                <div className="space-y-4">
-                  {activePatient.visitHistory.map((visit, idx) => (
-                    <div key={idx} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3 mb-3">
-                        <div className="flex items-center space-x-3">
-                          <div className="bg-blue-50 text-blue-600 p-2 rounded-lg"><Calendar size={16} /></div>
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900">{visit.date}</p>
-                            <p className="text-xs text-slate-500">{visit.department}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center text-sm font-medium text-slate-700 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
-                          <Stethoscope size={14} className="mr-2 text-slate-400" />
-                          {visit.doctor}
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-xs text-slate-500 mb-1 flex items-center"><Activity size={12} className="mr-1"/> Diagnosis</p>
-                          <p className="text-sm text-slate-900 font-medium">{visit.diagnosis}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-slate-500 mb-1 flex items-center"><Pill size={12} className="mr-1"/> Prescription</p>
-                          <p className="text-sm text-slate-900 font-medium">{visit.prescription}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                <div className="text-sm text-slate-500 italic">
+                  History integration pending (Fetch prescriptions endpoint)...
                 </div>
               </div>
 
@@ -474,11 +448,11 @@ export function ReceptionDashboard() {
                   </div>
                   <div className="w-full space-y-1.5">
                     <label className="text-sm font-medium text-slate-700">Assign Doctor</label>
-                    <select name="doctor" value={formData.doctor} onChange={handleInputChange} className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9]" required>
+                    <select name="doctorId" value={formData.doctorId} onChange={handleInputChange} className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9]" required>
                       <option value="">Select Doctor</option>
-                      <option value="Dr. Emily Chen">Dr. Emily Chen (Pulmonology)</option>
-                      <option value="Dr. Amit Sharma">Dr. Amit Sharma (Cardiology)</option>
-                      <option value="Dr. Sarah Wilson">Dr. Sarah Wilson (Dermatology)</option>
+                      {doctors.map(d => (
+                        <option key={d._id} value={d._id}>{d.name} ({d.department || 'General'})</option>
+                      ))}
                     </select>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
@@ -586,11 +560,11 @@ export function ReceptionDashboard() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="w-full space-y-1.5">
                         <label className="text-sm font-medium text-slate-700">Assign Doctor</label>
-                        <select name="doctor" value={formData.doctor} onChange={handleInputChange} className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] transition-colors" required>
+                        <select name="doctorId" value={formData.doctorId} onChange={handleInputChange} className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0ea5e9] transition-colors" required>
                           <option value="">Select Doctor</option>
-                          <option value="Dr. Emily Chen">Dr. Emily Chen (Pulmonology)</option>
-                          <option value="Dr. Amit Sharma">Dr. Amit Sharma (Cardiology)</option>
-                          <option value="Dr. Sarah Wilson">Dr. Sarah Wilson (Dermatology)</option>
+                          {doctors.map(d => (
+                            <option key={d._id} value={d._id}>{d.name} ({d.department || 'General'})</option>
+                          ))}
                         </select>
                       </div>
                       <Input label="Date" type="date" name="appointmentDate" value={formData.appointmentDate} onChange={handleInputChange} required />
@@ -645,25 +619,23 @@ export function ReceptionDashboard() {
               </tr>
             </thead>
             <tbody>
-              {recentPatients.map((patient, idx) => (
+              {allPatients.slice(0, 10).map((patient, idx) => (
                 <tr key={idx} className="bg-white border-b border-slate-100 hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center space-x-3">
-                      <img src={patient.img} alt={patient.name} className="w-8 h-8 rounded-full border border-slate-200 object-cover" />
-                      <span className="font-medium text-slate-900">{patient.name}</span>
+                      <img src={`https://i.pravatar.cc/150?u=${patient.patientId}`} alt={patient.fullName} className="w-8 h-8 rounded-full border border-slate-200 object-cover" />
+                      <span className="font-medium text-slate-900">{patient.fullName}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 font-mono text-slate-500">{patient.id}</td>
-                  <td className="px-6 py-4 text-slate-700">{patient.doctor}</td>
-                  <td className="px-6 py-4 text-slate-700">{patient.time}</td>
+                  <td className="px-6 py-4 font-mono text-slate-500">{patient.patientId}</td>
+                  <td className="px-6 py-4 text-slate-700">{patient.assignedDoctor?.name || 'N/A'}</td>
+                  <td className="px-6 py-4 text-slate-700">{new Date(patient.createdAt).toLocaleTimeString()}</td>
                   <td className="px-6 py-4">
                     <span className={cn(
                       "px-2.5 py-1 rounded-full text-xs font-medium border",
-                      patient.status === 'Waiting' ? "bg-amber-50 text-amber-700 border-amber-200" :
-                      patient.status === 'In Consultation' ? "bg-blue-50 text-blue-700 border-blue-200" :
                       "bg-emerald-50 text-emerald-700 border-emerald-200"
                     )}>
-                      {patient.status}
+                      Registered
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">

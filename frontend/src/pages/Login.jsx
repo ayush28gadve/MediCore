@@ -1,20 +1,36 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Lock, HeartPulse } from 'lucide-react';
+import { ArrowLeft, Mail, Lock, HeartPulse, AlertCircle } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
+import { useAuth } from '../context/AuthContext';
 
 export function Login() {
   const { role } = useParams();
   const navigate = useNavigate();
+  const { login } = useAuth();
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    // Temporary routing logic
-    if (role) {
-      navigate(`/${role}/dashboard`);
+    setError('');
+    setIsLoading(true);
+    try {
+      const user = await login(email, password);
+      if (user.role === role) {
+        navigate(`/${role}/dashboard`);
+      } else {
+        // Redirect to their actual role dashboard if they logged into the wrong page
+        navigate(`/${user.role}/dashboard`);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to login. Please check credentials.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -41,6 +57,12 @@ export function Login() {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-2xl sm:px-10 border border-slate-200">
+          {error && (
+            <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-3 text-red-700">
+              <AlertCircle size={18} className="mt-0.5 flex-shrink-0" />
+              <p className="text-sm font-medium">{error}</p>
+            </div>
+          )}
           <form className="space-y-6" onSubmit={handleLogin}>
             <Input
               label="Email address"
@@ -83,14 +105,15 @@ export function Login() {
             </div>
 
             <div className="space-y-3">
-              <Button type="submit" className="w-full">
-                Sign in
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? 'Signing in...' : 'Sign in'}
               </Button>
               <Button 
                 type="button" 
                 variant="outline" 
                 className="w-full"
                 onClick={() => navigate('/')}
+                disabled={isLoading}
               >
                 Create new account
               </Button>

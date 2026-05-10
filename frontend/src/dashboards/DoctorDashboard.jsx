@@ -9,94 +9,12 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { PrescriptionPrint } from '../components/PrescriptionPrint';
 import { cn } from '../utils/utils';
+import { appointmentService } from '../services/appointmentService';
+import { prescriptionService } from '../services/prescriptionService';
+import { useAuth } from '../context/AuthContext';
+import { useEffect } from 'react';
 
-// Comprehensive Deep Dummy Data matched to Reception System
-const MOCK_QUEUE = [
-  {
-    queueNo: 'Q-01',
-    patientId: 'MC-001',
-    fullName: 'Rahul Patil',
-    age: '32',
-    gender: 'Male',
-    bloodGroup: 'A+',
-    phone: '9876543210',
-    address: '101, Shivneri Appt, Kothrud, Pune',
-    appointmentTime: '09:00 AM',
-    status: 'Waiting',
-    reason: 'Mild Asthma Exacerbation, shortness of breath',
-    allergies: 'Dust, Pollen',
-    medicalHistory: 'Chronic Asthma since 2020.',
-    visitHistory: [
-      { date: '2026-05-08', doctor: 'Dr. Emily Chen', diagnosis: 'Mild Asthma Exacerbation', prescription: 'Salbutamol Inhaler (SOS), Montelukast 10mg OD' },
-      { date: '2026-01-12', doctor: 'Dr. Michael Smith', diagnosis: 'Viral Fever', prescription: 'Paracetamol 500mg' }
-    ],
-    reports: [
-      { name: 'Pulmonary Function Test.pdf', date: '2026-05-08' },
-      { name: 'CBC Panel.pdf', date: '2026-01-12' }
-    ]
-  },
-  {
-    queueNo: 'Q-02',
-    patientId: 'MC-002',
-    fullName: 'Shubham Kale',
-    age: '45',
-    gender: 'Male',
-    bloodGroup: 'O-',
-    phone: '9123456780',
-    address: '45, Laxmi Road, Pune',
-    appointmentTime: '09:30 AM',
-    status: 'In Consultation',
-    reason: 'Routine BP checkup, reported mild dizziness',
-    allergies: 'None',
-    medicalHistory: 'Hypertension detected 2023.',
-    visitHistory: [
-      { date: '2026-04-15', doctor: 'Dr. Amit Sharma', diagnosis: 'Elevated BP (150/95)', prescription: 'Telmisartan 40mg' }
-    ],
-    reports: [
-      { name: 'ECG Report.pdf', date: '2026-04-15' }
-    ]
-  },
-  {
-    queueNo: 'Q-03',
-    patientId: 'MC-003',
-    fullName: 'Amit Sharma',
-    age: '28',
-    gender: 'Male',
-    bloodGroup: 'B+',
-    phone: '9988776655',
-    address: '22, Baner Road, Pune',
-    appointmentTime: '10:00 AM',
-    status: 'Waiting',
-    reason: 'Contact Dermatitis follow-up',
-    allergies: 'Penicillin',
-    medicalHistory: 'None',
-    visitHistory: [
-      { date: '2026-05-02', doctor: 'Dr. Sarah Wilson', diagnosis: 'Contact Dermatitis', prescription: 'Hydrocortisone Cream 1%' }
-    ],
-    reports: []
-  },
-  {
-    queueNo: 'Q-04',
-    patientId: 'MC-004',
-    fullName: 'Priya Deshmukh',
-    age: '35',
-    gender: 'Female',
-    bloodGroup: 'AB+',
-    phone: '9011223344',
-    address: '11/A, Kalyani Nagar, Pune',
-    appointmentTime: '10:30 AM',
-    status: 'Follow-Up',
-    reason: 'Thyroid profile review',
-    allergies: 'Sulfa Drugs',
-    medicalHistory: 'Hypothyroidism',
-    visitHistory: [
-      { date: '2026-02-28', doctor: 'Dr. Emily Chen', diagnosis: 'Hypothyroidism Management', prescription: 'Levothyroxine 50mcg' }
-    ],
-    reports: [
-      { name: 'Thyroid Panel.pdf', date: '2026-02-28' }
-    ]
-  }
-];
+// Removed MOCK_QUEUE
 
 const StatusBadge = ({ status }) => {
   const styles = {
@@ -113,6 +31,8 @@ const StatusBadge = ({ status }) => {
 };
 
 export function DoctorDashboard() {
+  const { user } = useAuth();
+  const [appointments, setAppointments] = useState([]);
   const [activeConsultation, setActiveConsultation] = useState(null);
   
   // Editable Patient Info State
@@ -130,17 +50,52 @@ export function DoctorDashboard() {
   });
 
   const [showToast, setShowToast] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (user?._id) {
+      fetchQueue();
+    }
+  }, [user]);
+
+  const fetchQueue = async () => {
+    try {
+      const data = await appointmentService.getDoctorAppointments(user._id);
+      setAppointments(data);
+    } catch (error) {
+      console.error("Failed to fetch queue", error);
+    }
+  };
 
   const currentDate = new Date().toLocaleDateString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   });
 
-  const handleOpenConsultation = (patient) => {
-    setActiveConsultation(patient);
-    setPatientData({ ...patient });
+  const handleOpenConsultation = async (appointment) => {
+    const patient = appointment.patient;
+    
+    // Convert to flat structure for the UI
+    const flatPatient = {
+      ...patient,
+      reason: appointment.symptoms,
+      appointmentId: appointment._id,
+      queueNo: appointment.queueNumber
+    };
+
+    setActiveConsultation(flatPatient);
+    setPatientData({ ...flatPatient });
     setIsEditingPatient(false);
+    
     // Auto-fill symptoms if provided by reception
-    setConsultationData(prev => ({ ...prev, symptoms: patient.reason }));
+    setConsultationData(prev => ({ ...prev, symptoms: appointment.symptoms }));
+
+    // Change status to In Consultation
+    try {
+      await appointmentService.updateStatus(appointment._id, 'In Consultation');
+      fetchQueue(); // refresh queue
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleCloseConsultation = () => {
@@ -169,9 +124,27 @@ export function DoctorDashboard() {
     setConsultationData(prev => ({ ...prev, medicines: newMedicines }));
   };
 
-  const handleSaveConsultation = () => {
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
+  const handleSaveConsultation = async () => {
+    setIsSaving(true);
+    try {
+      await prescriptionService.create({
+        patient: activeConsultation._id,
+        appointmentId: activeConsultation.appointmentId,
+        diagnosis: consultationData.diagnosis,
+        medicines: consultationData.medicines,
+        notes: consultationData.notes,
+        followUpDate: consultationData.followUpDate
+      });
+
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+      fetchQueue(); // Refresh to show completed
+    } catch (error) {
+      console.error(error);
+      alert("Failed to save consultation");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handlePrintPrescription = () => {
@@ -240,29 +213,33 @@ export function DoctorDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {MOCK_QUEUE.map((apt) => (
-                  <tr key={apt.queueNo} className="bg-white border-b border-slate-100 hover:bg-blue-50/30 transition-colors">
+                {appointments.map((apt) => (
+                  <tr key={apt._id} className="bg-white border-b border-slate-100 hover:bg-blue-50/30 transition-colors">
                     <td className="px-6 py-4">
-                      <span className="font-mono font-bold text-slate-900 bg-slate-100 px-2 py-1 rounded border border-slate-200">{apt.queueNo}</span>
+                      <span className="font-mono font-bold text-slate-900 bg-slate-100 px-2 py-1 rounded border border-slate-200">{apt.queueNumber}</span>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center space-x-3">
-                        <img src={`https://i.pravatar.cc/150?u=${apt.patientId}`} alt={apt.fullName} className="w-9 h-9 rounded-full border border-slate-200 object-cover" />
+                        <img src={`https://i.pravatar.cc/150?u=${apt.patient.patientId}`} alt={apt.patient.fullName} className="w-9 h-9 rounded-full border border-slate-200 object-cover" />
                         <div>
-                          <span className="font-semibold text-slate-900 block">{apt.fullName}</span>
-                          <span className="text-xs font-mono text-slate-500">{apt.patientId}</span>
+                          <span className="font-semibold text-slate-900 block">{apt.patient.fullName}</span>
+                          <span className="text-xs font-mono text-slate-500">{apt.patient.patientId}</span>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 font-medium text-slate-700">{apt.appointmentTime}</td>
-                    <td className="px-6 py-4 text-slate-600 max-w-[200px] truncate" title={apt.reason}>{apt.reason}</td>
+                    <td className="px-6 py-4 text-slate-600 max-w-[200px] truncate" title={apt.symptoms}>{apt.symptoms}</td>
                     <td className="px-6 py-4">
                       <StatusBadge status={apt.status} />
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <Button onClick={() => handleOpenConsultation(apt)} className="bg-[#0ea5e9] hover:bg-[#0284c7] text-white shadow-sm text-xs h-8 px-3">
-                        <Stethoscope size={14} className="mr-1.5" /> Open
-                      </Button>
+                      {apt.status !== 'Completed' ? (
+                        <Button onClick={() => handleOpenConsultation(apt)} className="bg-[#0ea5e9] hover:bg-[#0284c7] text-white shadow-sm text-xs h-8 px-3">
+                          <Stethoscope size={14} className="mr-1.5" /> Open
+                        </Button>
+                      ) : (
+                        <span className="text-sm font-semibold text-slate-400">Done</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -293,11 +270,11 @@ export function DoctorDashboard() {
               </div>
             </div>
             <div className="flex items-center space-x-3">
-              <Button variant="outline" className="text-slate-600 bg-white" onClick={handleSaveConsultation}>
+              <Button variant="outline" className="text-slate-600 bg-white" onClick={() => alert("Drafts not implemented in MVP")} disabled={isSaving}>
                 <Save size={16} className="mr-2" /> Save Draft
               </Button>
-              <Button className="bg-[#0ea5e9] hover:bg-[#0284c7] text-white shadow-md" onClick={() => {
-                handleSaveConsultation();
+              <Button className="bg-[#0ea5e9] hover:bg-[#0284c7] text-white shadow-md" disabled={isSaving} onClick={async () => {
+                await handleSaveConsultation();
                 setTimeout(() => handleCloseConsultation(), 1000);
               }}>
                 <CheckCircle2 size={16} className="mr-2" /> Mark Complete
@@ -386,22 +363,7 @@ export function DoctorDashboard() {
                 <div>
                   <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 border-b border-slate-200 pb-2">Clinical Reference</h3>
                   <div className="flex gap-4 overflow-x-auto pb-2">
-                    {patientData.visitHistory.map((h, i) => (
-                      <div key={i} className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm min-w-[240px] flex-shrink-0">
-                        <p className="text-xs font-semibold text-[#0ea5e9] mb-1">{h.date}</p>
-                        <p className="text-sm font-bold text-slate-900 mb-1 truncate">{h.diagnosis}</p>
-                        <p className="text-xs text-slate-500 truncate"><Pill size={10} className="inline mr-1" />{h.prescription}</p>
-                      </div>
-                    ))}
-                    {patientData.reports.map((r, i) => (
-                      <div key={`r-${i}`} className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm min-w-[200px] flex-shrink-0 flex items-center space-x-3 cursor-pointer hover:border-[#0ea5e9] transition-colors">
-                        <div className="bg-red-50 text-red-500 p-2 rounded-lg"><FileSymlink size={16} /></div>
-                        <div>
-                          <p className="text-xs font-bold text-slate-900 truncate max-w-[120px]">{r.name}</p>
-                          <p className="text-[10px] text-slate-500">{r.date}</p>
-                        </div>
-                      </div>
-                    ))}
+                    <p className="text-sm italic text-slate-500">History not available in MVP</p>
                   </div>
                 </div>
 
@@ -469,7 +431,7 @@ export function DoctorDashboard() {
                   {/* Invisible Actual Print Component */}
                   <PrescriptionPrint 
                     patient={patientData}
-                    doctor={{ name: "Dr. Emily Chen", department: "MBBS, MD - Pulmonology", regNo: "MAH-2015-8942" }}
+                    doctor={{ name: user?.name, department: user?.department || "General Medicine", regNo: "MAH-2015-8942" }}
                     diagnosis={consultationData.diagnosis}
                     medicines={consultationData.medicines}
                     notes={consultationData.notes || consultationData.symptoms}
@@ -483,8 +445,8 @@ export function DoctorDashboard() {
                       <p className="text-sm text-slate-500 mt-1">Excellence in Healthcare</p>
                     </div>
                     <div className="text-right">
-                      <h2 className="text-xl font-bold text-slate-900">Dr. Emily Chen</h2>
-                      <p className="text-sm text-slate-600 font-medium">MBBS, MD - Pulmonology</p>
+                      <h2 className="text-xl font-bold text-slate-900">{user?.name}</h2>
+                      <p className="text-sm text-slate-600 font-medium">{user?.department || "General Medicine"}</p>
                       <p className="text-xs text-slate-500">Reg No: MAH-2015-8942</p>
                     </div>
                   </div>
